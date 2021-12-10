@@ -55,23 +55,36 @@ app.post("/register", (req, res) => {
 });
 
 const urlDatabase = {
-  'b6UTxQ': {
-      longURL: "https://www.tsn.ca",
-      userID: "aJ48lW"
+  b6UTxQ: {
+    longURL: "https://www.tsn.ca",
+    userID: "aJ48lW",
   },
-  "i3BoGr": {
-      longURL: "https://www.google.ca",
-      userID: "aJ48lW"
-  }
+  i3BoGr: {
+    longURL: "https://www.google.ca",
+    userID: "123",
+  },
 };
 //urldatabse[shorturl]=> object => keys of longurl and user_id
 //urldabase[shorturl].longurl
 //urldabase[shorturl].user_id
-
+// // if (result.err) {
+//   alert(result.err);
+// }
+// if (result.data) {
+//   res.redirect("/urls");
+// }
 
 app.get("/urls", (req, res) => {
- const templateVars = {urls: urlDatabase, user: users[req.cookies["user_id"]]}
-console.log("!!!" , urlDatabase);
+  if (!req.cookies["user_id"]) {
+    res.redirect("/login?reason=InvalidCredentials");
+  }
+
+  const user = users[req.cookies["user_id"]];
+  const urls = urlsForUser(user.id);
+  const templateVars = {
+    urls,
+    user: users[req.cookies["user_id"]],
+  };
   res.render("urls_index", templateVars);
 });
 
@@ -98,7 +111,7 @@ app.post("/login", (req, res) => {
 
 app.post("/logout", (req, res) => {
   res.clearCookie("user_id");
-  res.redirect("/urls");
+  res.redirect("/login");
 });
 
 app.get("/register", (req, res) => {
@@ -109,7 +122,6 @@ app.get("/register", (req, res) => {
 app.get("/urls/new", (req, res) => {
   const templateVars = {
     user: users[req.cookies["user_id"]],
-
   };
   if (!templateVars.user) res.status(403).send("Not authorize for this action");
   res.render("urls_new", templateVars);
@@ -117,42 +129,81 @@ app.get("/urls/new", (req, res) => {
 
 //short url and long url
 app.get("/urls/:shortURL", (req, res) => {
+  const shortURL = req.params.shortURL;
+  if (!req.cookies["user_id"]) {
+    res.redirect("/login");
+  }
+  const user = users[req.cookies["user_id"]];
+  
+  if (!urlDatabase[shortURL]) {
+    res.send("Not authorized for this action");
+  } else if (urlDatabase[shortURL].userID !== user.id) {
+    res.send("Not authorized for this action");
+  }
+  if (!shortURL) {
+    return "This url does not exist";
+  }
+
   const templateVars = {
-    shortURL: req.params.shortURL,
+    shortURL,
     longURL: urlDatabase[req.params.shortURL].longURL,
-    user: users[req.cookies['user_id']],
+    user: users[req.cookies["user_id"]],
   };
-  // console.log("issue of longurl", templateVars.urlDatabase[req.params.shortURL].longURL);
+
+  console.log(
+    "issue of longurl",
+    urlDatabase[req.params.shortURL],
+    urlDatabase[req.params.shortURL].longURL,
+    req.params.shortURL
+  );
   res.render("urls_show", templateVars);
 });
 
 //shortURL taking to long url
 app.get("/u/:shortURL", (req, res) => {
-
   const longURL = urlDatabase[req.params.shortURL].longURL;
- 
+
   res.redirect(longURL);
 });
 
 app.post("/urls", (req, res) => {
-  const userId = req.cookies["user_id"];
+  const userID = req.cookies["user_id"];
   const shortURL = generateRandomString();
-  const longUrl = req.body.longURL;
+  const longURL = req.body.longURL;
   urlDatabase[shortURL] = {
-    longUrl,
-    userId
+    longURL,
+    userID,
   };
-  console.log("----------", urlDatabase[shortURL]);
+  console.log("----------", urlDatabase);
   res.redirect(`/urls/${shortURL}`);
 });
+
+//display a prompt if the user not logged in or if th url with the matching id doest not belong to them
+//urlsForUser(id) which returns the URLs where the userID is equal to the id of the currently logged-in user.
+
+//if user id not logged in prompt log in first
+//need to filter the urldabase => userid === loggedin userid
+//before rendering the urls oage
+
+const urlsForUser = (id) => {
+  const urls = [];
+  console.log("in url function", urlDatabase);
+  for (const [key, value] of Object.entries(urlDatabase)) {
+    console.log("in loop", key, value);
+    if (value.userID === id) {
+      value.shortURL = key;
+      urls.push(value);
+    }
+  }
+
+  return urls;
+};
 
 //updating the long url
 app.post("/urls/:id", (req, res) => {
   const key = req.params.id;
+
   urlDatabase[key].longURL = req.body.longURL;
-  if(!key){
-    return ("This url does not exist")
-  }
   res.redirect("/urls");
 });
 
