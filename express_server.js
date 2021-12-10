@@ -1,5 +1,6 @@
 const express = require("express");
 var cookieParser = require("cookie-parser");
+const bcrypt = require('bcryptjs');
 const app = express();
 app.use(cookieParser());
 const PORT = 8080; // default port 8080
@@ -31,16 +32,17 @@ const findUserByEmail = (email) => {
   }
   return null;
 };
+const salt = bcrypt.genSaltSync(10);
 
 app.post("/register", (req, res) => {
   const id = generateRandomString();
   const email = req.body.email;
-  const password = req.body.password;
+  const password = bcrypt.hashSync(req.body.password, salt);
   const user = findUserByEmail(email);
-  users[id] = { id: id, email: email, password: password };
+  users[id] = { id: id, email: email, password: password  };
 
-  if (!email || !password) {
-    return res.status(400).send("email and password cannot be blank");
+  if (!email || !password ) {
+    return res.status(400).send("email and password  cannot be blank");
   }
 
   console.log("user", user);
@@ -94,13 +96,13 @@ app.get("/login", (req, res) => {
 //login page and cookie
 app.post("/login", (req, res) => {
   const email = req.body.email;
-  const password = req.body.password;
+  const password  = req.body.password;
 
   const user = findUserByEmail(email);
 
   if (!user) {
     return res.status(403).send("a user with that email doesn't exists");
-  } else if (user.password !== password) {
+  } else if (bcrypt.compareSync(user.password, password)){
     return res.status(403).send("your password doesn not match");
   }
 
