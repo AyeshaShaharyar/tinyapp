@@ -1,12 +1,22 @@
 const express = require("express");
-var cookieParser = require("cookie-parser");
+var cookieSession = require('cookie-session');
 const bcrypt = require('bcryptjs');
+const {findUserByEmail} = require("./helpers")
 const app = express();
-app.use(cookieParser());
+
 const PORT = 8080; // default port 8080
 
 const bodyParser = require("body-parser");
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(
+  cookieSession({
+    name: "session",
+    keys: [
+      "I like potatoes and gravy and cheese",
+      "I prefer filtered coffee over espresso, sometimes",
+    ],
+  })
+);
 
 app.set("view engine", "ejs");
 
@@ -23,22 +33,14 @@ const users = {
   },
 };
 
-const findUserByEmail = (email) => {
-  for (const userId in users) {
-    const user = users[userId];
-    if (user.email === email) {
-      return user;
-    }
-  }
-  return null;
-};
+
 const salt = bcrypt.genSaltSync(10);
 
 app.post("/register", (req, res) => {
   const id = generateRandomString();
   const email = req.body.email;
   const password = bcrypt.hashSync(req.body.password, salt);
-  const user = findUserByEmail(email);
+  const user = findUserByEmail(email, users);
   users[id] = { id: id, email: email, password: password  };
 
   if (!email || !password ) {
@@ -51,7 +53,8 @@ app.post("/register", (req, res) => {
     return res.status(400).send("a user with that email already exists");
   }
 
-  res.cookie("user_id", id);
+  
+  req.session.user_id = id;
   console.log(users[id]);
   res.redirect("/urls");
 });
@@ -66,26 +69,17 @@ const urlDatabase = {
     userID: "123",
   },
 };
-//urldatabse[shorturl]=> object => keys of longurl and user_id
-//urldabase[shorturl].longurl
-//urldabase[shorturl].user_id
-// // if (result.err) {
-//   alert(result.err);
-// }
-// if (result.data) {
-//   res.redirect("/urls");
-// }
 
 app.get("/urls", (req, res) => {
-  if (!req.cookies["user_id"]) {
+  if (!req.session.user_id) {
     res.redirect("/login?reason=InvalidCredentials");
   }
 
-  const user = users[req.cookies["user_id"]];
+  const user = users[req.session.user_id];
   const urls = urlsForUser(user.id);
   const templateVars = {
     urls,
-    user: users[req.cookies["user_id"]],
+    user: users[req.session.user_id],
   };
   res.render("urls_index", templateVars);
 });
@@ -98,21 +92,22 @@ app.post("/login", (req, res) => {
   const email = req.body.email;
   const password  = req.body.password;
 
-  const user = findUserByEmail(email);
+  const user = findUserByEmail(email, users);
 
   if (!user) {
     return res.status(403).send("a user with that email doesn't exists");
   } else if (bcrypt.compareSync(user.password, password)){
     return res.status(403).send("your password doesn not match");
   }
-
-  res.cookie("user_id", user.id);
+ req.session.user_id = user.id;
+ 
 
   res.redirect("/urls");
 });
 
 app.post("/logout", (req, res) => {
-  res.clearCookie("user_id");
+  delete req.session.user_id;
+  
   res.redirect("/login");
 });
 
@@ -123,7 +118,7 @@ app.get("/register", (req, res) => {
 //new url
 app.get("/urls/new", (req, res) => {
   const templateVars = {
-    user: users[req.cookies["user_id"]],
+    user: users[req.session.user_id],
   };
   if (!templateVars.user) res.status(403).send("Not authorize for this action");
   res.render("urls_new", templateVars);
@@ -132,10 +127,10 @@ app.get("/urls/new", (req, res) => {
 //short url and long url
 app.get("/urls/:shortURL", (req, res) => {
   const shortURL = req.params.shortURL;
-  if (!req.cookies["user_id"]) {
+  if (!req.session.user_id) {
     res.redirect("/login");
   }
-  const user = users[req.cookies["user_id"]];
+  const user = users[req.session.user_id];
   
   if (!urlDatabase[shortURL]) {
     res.send("Not authorized for this action");
@@ -149,7 +144,7 @@ app.get("/urls/:shortURL", (req, res) => {
   const templateVars = {
     shortURL,
     longURL: urlDatabase[req.params.shortURL].longURL,
-    user: users[req.cookies["user_id"]],
+    user: users[req.session.user_id],
   };
 
   console.log(
@@ -169,7 +164,7 @@ app.get("/u/:shortURL", (req, res) => {
 });
 
 app.post("/urls", (req, res) => {
-  const userID = req.cookies["user_id"];
+  const userID = req.session.user_id;
   const shortURL = generateRandomString();
   const longURL = req.body.longURL;
   urlDatabase[shortURL] = {
