@@ -1,4 +1,4 @@
-
+//tests for findUserByEmail function
 const { assert } = require('chai');
 
 const { findUserByEmail } = require('../helpers.js');
