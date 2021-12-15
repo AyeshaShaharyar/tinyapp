@@ -1,7 +1,11 @@
 const express = require("express");
 var cookieSession = require("cookie-session");
 const bcrypt = require("bcryptjs");
-const { findUserByEmail, generateRandomString, urlsForUser } = require("./helpers");
+const {
+  findUserByEmail,
+  generateRandomString,
+  urlsForUser,
+} = require("./helpers");
 const bodyParser = require("body-parser");
 const app = express();
 
@@ -27,8 +31,6 @@ const users = {
     email: "joe@hotmail.com",
     password: "$2a$10$NX5z5whsZmKEfQriLnuP5uVFL2oTA0isUYXYUkBnhytFRVOpkf9vm",
   },
-
-
 };
 
 const urlDatabase = {
@@ -47,9 +49,11 @@ const salt = bcrypt.genSaltSync(10);
 // ---------------- Register (Get and Post) ---------------- //
 
 app.get("/register", (req, res) => {
-  res.render("register");
+  const templateVars = {
+    user: users[req.session.user_id],
+  };
+  res.render("register", templateVars);
 });
-
 
 app.post("/register", (req, res) => {
   const id = generateRandomString();
@@ -75,14 +79,20 @@ app.post("/register", (req, res) => {
   }
 
   req.session.user_id = id;
-  
+
   res.redirect("/urls");
 });
 
 // ---------------- Login (Get and Post) ---------------- //
+app.get("/", (req, res) => {
+  res.redirect("/urls");
+});
 
 app.get("/login", (req, res) => {
-  res.render("login");
+  const templateVars = {
+    user: users[req.session.user_id],
+  };
+  res.render("login", templateVars);
 });
 
 app.post("/login", (req, res) => {
@@ -90,7 +100,7 @@ app.post("/login", (req, res) => {
   // const password = bcrypt.hashSync(req.body.password, salt);;
 
   const user = findUserByEmail(email, users);
-  
+
   const passwordMatch = bcrypt.compareSync(req.body.password, user.password);
 
   if (!user) {
@@ -111,7 +121,7 @@ app.post("/login", (req, res) => {
 
 app.get("/urls", (req, res) => {
   if (!req.session.user_id) {
-    res.send("Please <a href='/login'>login</a> first");
+    res.redirect("/login");
   }
 
   const user = users[req.session.user_id];
@@ -132,7 +142,7 @@ app.post("/urls", (req, res) => {
     longURL,
     userID,
   };
- 
+
   res.redirect(`/urls`);
 });
 
@@ -142,8 +152,11 @@ app.get("/urls/new", (req, res) => {
     user: users[req.session.user_id],
   };
   if (!templateVars.user) {
-    res.status(403).send("Not authorize for this action. Please <a href='/login'>login</a> first.");
-    
+    res
+      .status(403)
+      .send(
+        "Not authorize for this action. Please <a href='/login'>login</a> first."
+      );
   }
 
   res.render("urls_new", templateVars);
@@ -184,14 +197,11 @@ app.get("/u/:shortURL", (req, res) => {
 
   if (!urlDatabase[shortURL]) {
     res.send("Not authorized for this action");
-  } else if (urlDatabase[shortURL].userID !== user.id) {
-    res.send("Not authorized for this action");
   }
   const longURL = urlDatabase[req.params.shortURL].longURL;
 
   res.redirect(longURL);
 });
-
 
 app.get("/u/:id", (req, res) => {
   const key = req.params.id;
